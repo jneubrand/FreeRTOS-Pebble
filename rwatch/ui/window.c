@@ -12,6 +12,10 @@
 
 node_t *_window_list_head;
 
+void _window_unload_proc(Window *window);
+void _window_load_proc(Window *window);
+void _window_load_click_config(Window *window);
+
 /*
  * Create a new top level window and all of the contents therein
  */
@@ -79,7 +83,7 @@ static void push_animation_teardown(Animation *animation) {
  */
 void window_stack_push(Window *window, bool animated)
 {
-    node_add(&_window_list_head, window);
+    node_insert(&_window_list_head, NULL, window);
     
     if (animated)
     {
@@ -93,11 +97,12 @@ void window_stack_push(Window *window, bool animated)
             .teardown = push_animation_teardown
         };
         animation_set_implementation(animation, &implementation);
-        
+
         // Play the animation
         //animation_schedule(animation);
     }
-    window_configure();
+
+    window_configure(window);
     window_dirty(true);
 }
 
@@ -109,6 +114,11 @@ Window * window_stack_pop(bool animated)
     Window *wind = window_stack_get_top_window();
     window_stack_remove(wind, animated);
     
+    Window *newwind = window_stack_get_top_window();
+
+    if (newwind)
+        window_configure(newwind);
+
     return wind;
 }
 
@@ -127,15 +137,9 @@ bool window_stack_remove(Window *window, bool animated)
  */
 Window * window_stack_get_top_window(void)
 {
-    node_t *cur = _window_list_head;
-    
-    if (_window_list_head == NULL)
-        return NULL;    
-       
-    /* fast forward to the node we want to find */
-    while(cur != NULL && cur->next != NULL)
-        cur = cur->next;
-    return (Window *)cur->data;
+    if (_window_list_head)
+        return (Window *)_window_list_head->data;
+    return NULL;
 }
 
 uint16_t window_count(void)
@@ -173,10 +177,24 @@ bool window_stack_contains_window(Window *window)
  */
 void window_destroy(Window *window)
 {
-    // free all of the layers
+    node_remove(&_window_list_head, window);
+    /* Unload the window */
+    _window_unload_proc(window);
+    /* free all of the layers */
     layer_destroy(window->root_layer);
-    // and now the window
+    /* and now the window */
     app_free(window);
+    window = window_stack_get_top_window();
+    if (!window)
+    {
+        SYS_LOG("window", APP_LOG_LEVEL_INFO, "No more windows!");
+        return;
+    }
+    
+    /* Clean up the clink handler and remap back to our current window */
+    _window_load_click_config(window);
+    window_draw();
+    window_dirty(true);
 }
 
 /*
@@ -210,7 +228,7 @@ void window_dirty(bool is_dirty)
     }
 }
 
-void window_draw()
+void window_draw(void)
 {
     Window *wind = window_stack_get_top_window();
     
@@ -224,8 +242,8 @@ void window_draw()
         context->fill_color = wind->background_color;
         graphics_fill_rect_app(context, GRect(0, 0, frame.size.w, frame.size.h), 0, GCornerNone);
         
-        walk_layers(wind->root_layer, context);
-        
+        /* draw all the layers out to the fb before we push */
+        layer_draw(wind->root_layer, context);        
         rbl_draw();
         wind->is_render_scheduled = false;
     }
@@ -313,30 +331,47 @@ void window_set_click_context(ButtonId button_id, void *context)
  * These will call through to the pointers to the functions in
  * the user supplied window
  */
-void window_configure(void)
+void window_configure(Window *window)
 {
     // we assume they are configured now
-    rbl_window_load_proc();
-    rbl_window_load_click_config();
+    _window_load_proc(window);
+    _window_load_click_config(window);
 }
 
-void rbl_window_load_proc(void)
+/* 
+ * Call the window's _load handler and flag as loaded
+ */
+void _window_load_proc(Window *window)
 {
-    Window *wind = window_stack_get_top_window();
-    
-    if (_window_list_head && wind->window_handlers.load && !wind->is_loaded) {
-        wind->window_handlers.load(wind);
-        wind->is_loaded = true;
+    if (_window_list_head && !window->is_loaded) {
+        if (window->window_handlers.load)
+            window->window_handlers.load(window);
+        
+        /* we should flag as loaded even if they don't have a load handler */
+        window->is_loaded = true;
+        return;
     }
 }
 
-void rbl_window_load_click_config(void)
+/* 
+ * Call the window's _unload handler and flag as unloaded
+ */
+void _window_unload_proc(Window *window)
 {
-    Window *wind = window_stack_get_top_window();
-    
-    if (wind->click_config_provider) {
-        void* context = wind->click_config_context ? wind->click_config_context : wind;
-        wind->click_config_provider(context);
+    if (_window_list_head && window->is_loaded) {
+        if (window->window_handlers.unload)
+            window->window_handlers.unload(window);
+        
+        window->is_loaded = false;
+    }
+}
+
+
+void _window_load_click_config(Window *window)
+{   
+    if (window->click_config_provider) {
+        void* context = window->click_config_context ? window->click_config_context : window;
+        window->click_config_provider(context);
     }
 }
 

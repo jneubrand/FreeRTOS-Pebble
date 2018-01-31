@@ -386,7 +386,7 @@ void app_event_loop(void)
         window_single_click_subscribe(BUTTON_ID_BACK, app_back_single_click_handler);
     }
     
-    window_configure();
+    window_configure(window_stack_get_top_window());
     
     // Install our own handler to hijack the long back press
     //window_long_click_subscribe(BUTTON_ID_BACK, 1100, back_long_click_handler, back_long_click_release_handler);

@@ -9,3 +9,4 @@ typedef struct node {
 void node_add(node_t **head, void *data);
 void node_remove(node_t **head, void *data);
 node_t *node_find(node_t **head, void *data);
+void node_insert(node_t **head, node_t *after, void *data);

@@ -23,6 +23,34 @@ void node_add(node_t **head, void *data)
     cur->next->next = NULL;
 }
 
+void node_insert(node_t **head, node_t *after, void *data)
+{
+    node_t *cur;
+    
+    cur = malloc(sizeof(node_t));
+    assert(cur && "Malloc Failed!");
+    cur->data = data;
+    cur->next = NULL;
+        
+    if (*head == NULL)
+    {   
+        *head = cur;
+        return;
+    }
+    
+    /* insert head */
+    if (after == NULL)
+    {
+        cur->next = *head;
+        *head = cur;
+        return;
+    }
+        
+    cur->next = after->next;
+    after->next = cur;
+    window_count();
+}
+
 void node_remove(node_t **head, void *data)
 {
     node_t *cur = *head;

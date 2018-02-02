@@ -8,11 +8,9 @@
 #include "librebble.h"
 #include "utils.h"
 
-static Layer *_layer_find_parent(Layer *orig_layer, Layer *layer);
-static void _layer_remove_node(Layer *to_be_removed);
-static void _layer_insert_node(Layer *layer_to_insert, Layer *sibling_layer, bool below);
-static void _layer_delete_tree(Layer *layer);
-static void _walk_layers(/*const*/ Layer *layer, GContext *context);
+Layer *layer_find_parent(Layer *orig_layer, Layer *layer);
+void layer_remove_node(Layer *to_be_removed);
+void layer_insert_node(Layer *layer_to_insert, Layer *sibling_layer, bool below);
 
 // Layer Functions
 Layer *layer_create(GRect frame)
@@ -53,10 +51,10 @@ void layer_destroy(Layer* layer)
 void layer_dtor(Layer *layer)
 {
     // remove our node
-    _layer_remove_node(layer);
-
+    SYS_LOG("layer", APP_LOG_LEVEL_ERROR, "Layer DTOR");
+    layer_remove_node(layer);
     // free the children too...
-    _layer_delete_tree(layer);
+    layer_delete_tree(layer);
 }
 
 GRect layer_get_unobstructed_bounds(Layer *layer)
@@ -171,22 +169,22 @@ struct Window *layer_get_window(const Layer *layer)
 
 void layer_remove_from_parent(Layer *child)
 {
-    _layer_remove_node(child);
+    layer_remove_node(child);
 }
 
 void layer_remove_child_layers(Layer *parent)
 {
-    _layer_delete_tree(parent->child);
+    layer_delete_tree(parent->child);
 }
 
 void layer_insert_below_sibling(Layer *layer_to_insert, Layer *below_sibling_layer)
 {
-    _layer_insert_node(layer_to_insert, below_sibling_layer, true);
+    layer_insert_node(layer_to_insert, below_sibling_layer, true);
 }
 
 void layer_insert_above_sibling(Layer *layer_to_insert, Layer *above_sibling_layer)
 {
-    _layer_insert_node(layer_to_insert, above_sibling_layer, false);
+    layer_insert_node(layer_to_insert, above_sibling_layer, false);
 }
 
 void layer_set_hidden(Layer *layer, bool hidden)
@@ -199,18 +197,15 @@ bool layer_get_hidden(const Layer *layer)
     return layer->hidden;
 }
 
-void layer_draw(const Layer *layer, GContext *context)
-{
-    _walk_layers(layer, context);
-}
 
-/* Private functions */
-static void _layer_insert_node(Layer *layer_to_insert, Layer *sibling_layer, bool below)
+// private?
+
+void layer_insert_node(Layer *layer_to_insert, Layer *sibling_layer, bool below)
 {
     if (below)
     {
         // first find the sibling that points to parent
-        Layer *parent = _layer_find_parent(sibling_layer, sibling_layer);
+        Layer *parent = layer_find_parent(sibling_layer, sibling_layer);
         layer_to_insert->parent = parent->parent;
         layer_to_insert->sibling = parent->sibling;
         parent->sibling = layer_to_insert;
@@ -224,27 +219,31 @@ static void _layer_insert_node(Layer *layer_to_insert, Layer *sibling_layer, boo
     }
 }
 
-static void _layer_remove_node(Layer *to_be_removed)
+void layer_remove_node(Layer *to_be_removed)
 {
     if (to_be_removed->parent == NULL)
         return;
     
-    Layer *parent = _layer_find_parent(to_be_removed, to_be_removed->parent);
-    
-    /* Are we the root node */
+    Layer *parent = layer_find_parent(to_be_removed, to_be_removed->parent);
+    // remove our node by pointing next to parents next, jumping over us
+SYS_LOG("window", APP_LOG_LEVEL_INFO, "layers rem %d %d %d %d", to_be_removed, parent, parent->sibling, parent->child);
     if (parent == NULL)
+    {
+        SYS_LOG("window", APP_LOG_LEVEL_INFO, "ROOT layers rem %d %d %d %d", to_be_removed, parent, parent->sibling, parent->child);
+        
+        /* we are the root node */
         return;
+    }
     
-    /* remove our node by pointing next to parents next, jumping over us */
     if (parent->sibling == to_be_removed)
     {
         parent->sibling = to_be_removed->sibling;
     }
     else if (parent->child == to_be_removed)
     {
-        parent->child = to_be_removed->child;
+        parent->child = NULL;
     }
-    to_be_removed->parent = NULL;
+    to_be_removed->parent = NULL;   
 }
 
 /*
@@ -256,7 +255,7 @@ static void _layer_remove_node(Layer *to_be_removed)
  * When exhaused it will walk the siblings of the parent, etc etc until
  * either 1) no more ram 2) completion
  */
-static void _walk_layers(/*const*/ Layer *layer, GContext *context)
+void walk_layers(/*const*/ Layer *layer, GContext *context)
 {
     if (layer)
     {
@@ -269,11 +268,11 @@ static void _walk_layers(/*const*/ Layer *layer, GContext *context)
                 layer->update_proc(layer, context);
 
             // walk this elements sub elements recursively before moving on to the next element
-            _walk_layers(layer->child, context);
+            walk_layers(layer->child, context);
 
             context->offset = previous_offset; // restore offset
         }
-        _walk_layers(layer->sibling, context);
+        walk_layers(layer->sibling, context);
     }
 }
 
@@ -286,7 +285,7 @@ void layer_apply_frame_offset(const Layer *layer, GContext *context)
 }
 
 
-static Layer *_layer_find_parent(Layer *orig_layer, Layer *layer)
+Layer *layer_find_parent(Layer *orig_layer, Layer *layer)
 {
     if (layer)
     {       
@@ -297,24 +296,41 @@ static Layer *_layer_find_parent(Layer *orig_layer, Layer *layer)
         
         // walk this elements sub elements recursively before moving on to the next element
         Layer *found_layer = NULL;
-        found_layer = _layer_find_parent(orig_layer, layer->child);
+        found_layer = layer_find_parent(orig_layer, layer->child);
         if (found_layer)
             return found_layer;
         
-        found_layer = _layer_find_parent(orig_layer, layer->sibling);
+        found_layer = layer_find_parent(orig_layer, layer->sibling);
         if (found_layer)
             return found_layer;
     }
     return NULL;
 }
 
-
-static void _layer_delete_tree(Layer *layer)
+int inj = 0;
+void layer_delete_tree(Layer *layer)
 {
     if(layer)
     {
-        _layer_delete_tree(layer->child);
-        _layer_delete_tree(layer->sibling);
+        char sinj[20] = "";
+        for(int i = 0; i < inj; i++)
+            strncat(sinj, "   ", 3);
+       
+        SYS_LOG("test", APP_LOG_LEVEL_DEBUG, "DTREE %s |_ CHILD %d", sinj, layer);
+        if (layer->child)
+        {
+            inj++;
+            layer_delete_tree(layer->child);
+            inj--;
+        }
+        if (layer->sibling)
+        {
+            inj++;
+            SYS_LOG("test", APP_LOG_LEVEL_DEBUG, "DTREE %s   = SIB %d", sinj, layer);
+            layer_delete_tree(layer->sibling);
+            inj--;
+        }
+        SYS_LOG("test", APP_LOG_LEVEL_DEBUG, "DTREE %s    DONE %d", sinj, layer);
         app_free(layer);
     }
 }

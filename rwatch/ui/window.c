@@ -10,7 +10,7 @@
 #include "ngfxwrap.h"
 #include "node_list.h"
 
-node_t *_window_list_head;
+static list_head _window_list_head = LIST_HEAD(_window_list_head);
 
 void _window_unload_proc(Window *window);
 void _window_load_proc(Window *window);
@@ -83,8 +83,8 @@ static void push_animation_teardown(Animation *animation) {
  */
 void window_stack_push(Window *window, bool animated)
 {
-    node_insert(&_window_list_head, NULL, window);
-    
+    list_init_node(&window->node);
+    list_insert_head(&_window_list_head, &window->node);
     if (animated)
     {
         // Animate the window change
@@ -101,9 +101,9 @@ void window_stack_push(Window *window, bool animated)
         // Play the animation
         //animation_schedule(animation);
     }
-
     window_configure(window);
     window_dirty(true);
+    window_count();
 }
 
 /*
@@ -127,7 +127,7 @@ Window * window_stack_pop(bool animated)
  */
 bool window_stack_remove(Window *window, bool animated)
 {
-    node_remove(&_window_list_head, window);
+    list_remove(&_window_list_head, &window->node);
 
     return true;
 }
@@ -137,28 +137,25 @@ bool window_stack_remove(Window *window, bool animated)
  */
 Window * window_stack_get_top_window(void)
 {
-    if (_window_list_head)
-        return (Window *)_window_list_head->data;
-    return NULL;
+    return list_elem(list_get_head(&_window_list_head), Window, node);
 }
 
 uint16_t window_count(void)
 {
     uint16_t count = 0;
-    node_t *cur = _window_list_head;
+    Window *w;
     
-    if (_window_list_head == NULL)
+    if (list_get_head(&_window_list_head) == NULL)
         return 0;
     
-    /* fast forward to the node we want to find */
-    while(cur != NULL && cur->next != NULL)
+    list_foreach(w, &_window_list_head, Window, node)
     {
-        cur = cur->next;
         count++;
     }
+    
     SYS_LOG("window", APP_LOG_LEVEL_INFO, "COUNT %d", count);
     
-    return count + 1;
+    return count;
 }
 
 /*
@@ -166,8 +163,10 @@ uint16_t window_count(void)
  */
 bool window_stack_contains_window(Window *window)
 {
-    if (node_find(&_window_list_head, window) != NULL)
-        return true;
+    Window *w;
+    list_foreach(w, &_window_list_head, Window, node)
+        if (window == w)
+            return true;
     
     return false;
 }
@@ -177,7 +176,9 @@ bool window_stack_contains_window(Window *window)
  */
 void window_destroy(Window *window)
 {
-    node_remove(&_window_list_head, window);
+    list_remove(&_window_list_head, &window->node);
+    SYS_LOG("window", APP_LOG_LEVEL_INFO, "Destroy!");
+    window_count();
     /* Unload the window */
     _window_unload_proc(window);
     /* free all of the layers */
@@ -228,7 +229,7 @@ void window_dirty(bool is_dirty)
     }
 }
 
-void window_draw(void)
+void window_draw()
 {
     Window *wind = window_stack_get_top_window();
     
@@ -242,8 +243,8 @@ void window_draw(void)
         context->fill_color = wind->background_color;
         graphics_fill_rect_app(context, GRect(0, 0, frame.size.w, frame.size.h), 0, GCornerNone);
         
-        /* draw all the layers out to the fb before we push */
-        layer_draw(wind->root_layer, context);        
+        walk_layers(wind->root_layer, context);
+        
         rbl_draw();
         wind->is_render_scheduled = false;
     }
@@ -343,12 +344,12 @@ void window_configure(Window *window)
  */
 void _window_load_proc(Window *window)
 {
-    if (_window_list_head && !window->is_loaded) {
-        if (window->window_handlers.load)
-            window->window_handlers.load(window);
-        
-        /* we should flag as loaded even if they don't have a load handler */
-        window->is_loaded = true;
+     if (!window->is_loaded) { 
+        if (window->window_handlers.load) 
+            window->window_handlers.load(window); 
+         
+        /* we should flag as loaded even if they don't have a load handler */ 
+        window->is_loaded = true; 
         return;
     }
 }
@@ -356,22 +357,22 @@ void _window_load_proc(Window *window)
 /* 
  * Call the window's _unload handler and flag as unloaded
  */
-void _window_unload_proc(Window *window)
-{
-    if (_window_list_head && window->is_loaded) {
+void _window_unload_proc(Window *window) 
+{ 
+    if (window->is_loaded) {
         if (window->window_handlers.unload)
             window->window_handlers.unload(window);
         
+        /* we should flag as loaded even if they don't have a load handler */
         window->is_loaded = false;
+        return;
     }
 }
 
-
-void _window_load_click_config(Window *window)
-{   
-    if (window->click_config_provider) {
-        void* context = window->click_config_context ? window->click_config_context : window;
-        window->click_config_provider(context);
-    }
+void _window_load_click_config(Window *window) 
+{    
+    if (window->click_config_provider) { 
+        void* context = window->click_config_context ? window->click_config_context : window; 
+        window->click_config_provider(context); 
+    } 
 }
-

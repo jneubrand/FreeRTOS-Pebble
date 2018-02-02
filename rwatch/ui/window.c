@@ -243,7 +243,7 @@ void window_draw()
         context->fill_color = wind->background_color;
         graphics_fill_rect_app(context, GRect(0, 0, frame.size.w, frame.size.h), 0, GCornerNone);
         
-        walk_layers(wind->root_layer, context);
+        layer_draw(wind->root_layer, context);
         
         rbl_draw();
         wind->is_render_scheduled = false;
@@ -344,14 +344,15 @@ void window_configure(Window *window)
  */
 void _window_load_proc(Window *window)
 {
-     if (!window->is_loaded) { 
-        if (window->window_handlers.load) 
-            window->window_handlers.load(window); 
-         
-        /* we should flag as loaded even if they don't have a load handler */ 
-        window->is_loaded = true; 
+    if (window->is_loaded)
         return;
-    }
+         
+    if (window->window_handlers.load) 
+    window->window_handlers.load(window); 
+         
+    /* we should flag as loaded even if they don't have a load handler */ 
+    window->is_loaded = true; 
+    return;
 }
 
 /* 
@@ -359,14 +360,15 @@ void _window_load_proc(Window *window)
  */
 void _window_unload_proc(Window *window) 
 { 
-    if (window->is_loaded) {
-        if (window->window_handlers.unload)
-            window->window_handlers.unload(window);
-        
-        /* we should flag as loaded even if they don't have a load handler */
-        window->is_loaded = false;
+    if (!window->is_loaded)
         return;
-    }
+    
+    if (window->window_handlers.unload)
+        window->window_handlers.unload(window);
+    
+    /* we should flag as unloaded even if they don't have a load handler */
+    window->is_loaded = false;
+    return;
 }
 
 void _window_load_click_config(Window *window) 

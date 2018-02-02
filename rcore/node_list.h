@@ -1,6 +1,10 @@
 #pragma once
-/*
- * Courtesy of msullivan
+/* appmanager.c
+ * Routines for a double linked node list
+ * (For example usage see window.c)
+ * RebbleOS
+ * 
+ * Author: Michael Sullivan <sully@msully.net>.
  */
 #include <stddef.h>
 

@@ -59,6 +59,7 @@ typedef struct Animation
     TickType_t startticks;
     AnimationImplementation impl;
     struct AnimationHandler *anim_handlers;
+    void *context; /* for generic use */
 } Animation;
 
 typedef struct AnimationHandler

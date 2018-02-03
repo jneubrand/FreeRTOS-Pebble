@@ -14,18 +14,6 @@
 #include "node_list.h"
 
 struct Layer;
-
-// typedef void (*WindowButtonEventHandler)(AppContextRef app_ctx, struct Window *window, PebbleButtonEvent *event);
-//
-// typedef struct WindowInputHandlers
-// {
-//     struct
-//     {
-//         WindowButtonEventHandler up;
-//         WindowButtonEventHandler down;
-//     } buttons;
-// } WindowInputHandlers;
-
 typedef void (*WindowHandler)(struct Window *window);
 
 typedef struct WindowHandlers
@@ -54,7 +42,8 @@ typedef struct Window
     //bool overrides_back_button : 1;
     //bool is_fullscreen : 1;
     //const char *debug_name;
-    list_node node;
+    GRect frame;
+    list_node node; 
 } Window;
 
 // Window management

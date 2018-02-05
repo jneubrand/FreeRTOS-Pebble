@@ -23,8 +23,6 @@
  * 
  */
 extern  GFont *fonts_load_custom_font(ResHandle*, struct file *file);
-void _appmanager_load_app(app_running_thread *thread, ApplicationHeader *header);
-void _appmanager_execute_app(app_running_thread *thread, int total_app_size);
 
 static void _app_management_thread(void *parameters);
 static TaskHandle_t _app_thread_manager_task_handle;

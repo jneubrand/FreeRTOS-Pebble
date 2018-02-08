@@ -163,6 +163,7 @@ typedef struct app_running_thread_t {
     const char *thread_name;    
     uint8_t thread_priority;
     TaskHandle_t task_handle;
+    StaticTask_t static_task;
     size_t stack_size;
     size_t heap_size;
     struct CoreTimer *timer_head;
@@ -181,6 +182,8 @@ App *appmanager_get_current_app(void);
 bool appmanager_is_thread_system(void);
 void appmanager_load_app(app_running_thread *thread, ApplicationHeader *header);
 void appmanager_execute_app(app_running_thread *thread, int total_app_size);
+app_running_thread *appmanager_get_thread(AppThreadType type);
+AppThreadType appmanager_get_thread_type(void);
 
 /* in appmanager_app_runloop.c */
 void appmanager_app_runloop_init(void);
